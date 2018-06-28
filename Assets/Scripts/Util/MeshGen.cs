@@ -80,6 +80,72 @@ public static class MeshGen {
             outTriangles.Add(newVertexIds[inTriangles[i]]);
     }
 
+    // combine all duplicate vertices in the specified list and reassign triangle indices appropriately
+    public static void DeduplicateVertices(ref List<Vector3> vertices, ref List<int> triangles) {
+        List<Vector3> newVertices = new List<Vector3>();
+        int vc = vertices.Count;
+        int[] vertexMapping = new int[vertices.Count];
+        for (int i = 0; i < vc; i++) {
+            bool duplicate = false;
+            for (int j = 0; j < newVertices.Count; j++) {
+                if (vertices[i] == newVertices[j]) {
+                    duplicate = true;
+                    vertexMapping[i] = j;
+                    break;
+                }
+            }
+
+            if (!duplicate) {
+                vertexMapping[i] = newVertices.Count;
+                newVertices.Add(vertices[i]);
+            }
+        }
+
+        for (var i = 0; i < triangles.Count; i++) {
+            triangles[i] = vertexMapping[triangles[i]];
+        }
+
+        vertices = newVertices;
+    }
+
+    // combine all duplicate vertices in the specified list and reassign triangle indices appropriately
+    public static void DeduplicateVertices(ref List<Vector3> vertices, ref List<int>[] triangles) {
+        List<Vector3> newVertices = new List<Vector3>();
+        int vc = vertices.Count;
+        int[] vertexMapping = new int[vertices.Count];
+        for (int i = 0; i < vc; i++) {
+            bool duplicate = false;
+            for (int j = 0; j < newVertices.Count; j++) {
+                if (vertices[i] == newVertices[j]) {
+                    duplicate = true;
+                    vertexMapping[i] = j;
+                    break;
+                }
+            }
+
+            if (!duplicate) {
+                vertexMapping[i] = newVertices.Count;
+                newVertices.Add(vertices[i]);
+            }
+        }
+
+        for (var i = 0; i < triangles.Length; i++) {
+            for (var j = 0; j < triangles[i].Count; j++) {
+                triangles[i][j] = vertexMapping[triangles[i][j]];
+            }
+        }
+
+        vertices = newVertices;
+    }
+
+    // add reversed copies of triangles in the specified list
+    public static void AddBackFaces(ref List<int> triangles) {
+        int tc = triangles.Count;
+        for (int i = 0; i < tc; i += 3) {
+            AddTriangle(triangles[i], triangles[i + 2], triangles[i + 1], ref triangles);
+        }
+    }
+
     // return a point at angle angle and height y on a vertical cylinder with the specified radius
     public static Vector3 RadialPoint(float angle, float radius, float y) {
         float x = Mathf.Cos(angle) * radius;
