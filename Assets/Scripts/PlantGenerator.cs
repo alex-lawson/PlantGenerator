@@ -130,7 +130,7 @@ public class PlantGenerator : MonoBehaviour {
             }
         }
 
-        // rotate and translate segment into position
+        // orient and position stem segment
 
         int endVC = mg.VertexCount;
         mg.RotateVertices(startVC, endVC, orientation);
@@ -182,17 +182,9 @@ public class PlantGenerator : MonoBehaviour {
             mg.AddFace(petioleEndPoint, petioleRing[j], petioleRing[i]);
         }
 
-        int endVC = mg.VertexCount;
-
-        // rotate and translate petiole
-
-        mg.ScaleVertices(startVC, endVC, leafScale);
-        mg.RotateVertices(startVC, endVC, leafOrientation);
-        mg.TranslateVertices(startVC, endVC, position);
-
         // generate blade
 
-        startVC = endVC;
+        int bladeStartVC = mg.VertexCount;
 
         mg.SetMaterial(1);
 
@@ -216,11 +208,12 @@ public class PlantGenerator : MonoBehaviour {
         mg.AddFace(bladeBase, bladeRight, bladeTip);
         mg.AddFace(bladeBase, bladeTip, bladeLeft);
 
-        // rotate and translate blade
+        // orient and position leaf
 
-        endVC = mg.VertexCount;
+        int endVC = mg.VertexCount;
 
-        mg.TranslateVertices(startVC, endVC, new Vector3(0, 0, Species.PetioleLength * Species.BladePosition));
+        mg.TranslateVertices(bladeStartVC, endVC, new Vector3(0, 0, Species.PetioleLength * Species.BladePosition));
+
         mg.ScaleVertices(startVC, endVC, leafScale);
         mg.RotateVertices(startVC, endVC, leafOrientation);
         mg.TranslateVertices(startVC, endVC, position);
