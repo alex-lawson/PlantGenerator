@@ -10,7 +10,6 @@ public class PlantSpecies {
     public float ScaleExponent;
     public float LeafThreshold;
     public int LeavesPerSegment;
-    public float LeafVerticalAngle;
     public int WhorlNumber;
     public float PetioleLength;
     public float PetioleWidth;
@@ -19,9 +18,8 @@ public class PlantSpecies {
     public float BladeLength;
     public float BladeWidth;
     public float BladeFoldAngle;
-    public float BaseVerticalAngle;
-    public float SegmentVerticalAngle;
     public float SegmentAngleNoise;
+    public float LeafVerticalAngle;
     public float LeafAngleNoise;
 
     public void ClampValues() {
@@ -36,6 +34,8 @@ public class PlantSpecies {
         PetioleDepth = Mathf.Max(PetioleDepth, 0);
         BladeLength = Mathf.Max(BladeLength, 0);
         BladeWidth = Mathf.Max(BladeWidth, 0);
+        SegmentAngleNoise = Mathf.Clamp(SegmentAngleNoise, 0, 1);
+        LeafAngleNoise = Mathf.Clamp(LeafAngleNoise, 0, 1);
     }
 }
 
@@ -91,7 +91,7 @@ public class PlantGenerator : MonoBehaviour {
         var oldRandom = Random.state;
         Random.InitState(seed);
 
-        Quaternion baseRotation = Quaternion.Euler(Species.BaseVerticalAngle, 0, 0);
+        Quaternion baseRotation = Quaternion.identity;
 
         //float startTime = Time.realtimeSinceStartup;
 
@@ -111,6 +111,11 @@ public class PlantGenerator : MonoBehaviour {
         float startScale = Mathf.Pow(segmentGrowth, Species.ScaleExponent);
         float endScale = Mathf.Pow(segmentGrowth - 1, Species.ScaleExponent);
         float segmentLength = Species.SegmentLength * startScale;
+
+        if (Species.SegmentAngleNoise > 0) {
+            Quaternion noiseRotation = Quaternion.LookRotation(Random.insideUnitSphere, Vector3.up);
+            orientation = Quaternion.Lerp(orientation, noiseRotation, Species.SegmentAngleNoise);
+        }
 
         // build stem segment geometry
 
@@ -169,6 +174,12 @@ public class PlantGenerator : MonoBehaviour {
             float leafAngleSeparation = 360f / Species.LeavesPerSegment;
             for (int i = 0; i < Species.LeavesPerSegment; i++) {
                 Quaternion rotate = Quaternion.AngleAxis(leafBaseRotation + i * leafAngleSeparation, Vector3.up);
+
+                if (Species.LeafAngleNoise > 0) {
+                    Quaternion noiseRotation = Quaternion.LookRotation(Random.insideUnitSphere, Vector3.up);
+                    rotate = Quaternion.Lerp(rotate, noiseRotation, Species.LeafAngleNoise);
+                }
+
                 GenerateLeaf(startPosition, rotate * orientation, segmentGrowth - Species.LeafThreshold);
             }
         }
