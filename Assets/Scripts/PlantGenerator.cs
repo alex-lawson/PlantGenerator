@@ -19,6 +19,20 @@ public class PlantSpecies {
     public float BladeLength;
     public float BladeWidth;
     public float BladeFoldAngle;
+
+    public void ClampValues() {
+        StemSides = Mathf.Max(StemSides, 3);
+        SegmentLength = Mathf.Max(SegmentLength, 0);
+        SegmentRadius = Mathf.Max(SegmentRadius, 0);
+        ScaleExponent = Mathf.Max(ScaleExponent, 0);
+        LeavesPerSegment = Mathf.Max(LeavesPerSegment, 0);
+        WhorlNumber = Mathf.Clamp(WhorlNumber, 0, 26);
+        PetioleLength = Mathf.Max(PetioleLength, 0);
+        PetioleWidth = Mathf.Max(PetioleWidth, 0);
+        PetioleDepth = Mathf.Max(PetioleDepth, 0);
+        BladeLength = Mathf.Max(BladeLength, 0);
+        BladeWidth = Mathf.Max(BladeWidth, 0);
+    }
 }
 
 [ExecuteInEditMode]
@@ -31,45 +45,41 @@ public class PlantGenerator : MonoBehaviour {
     public float Growth;
     public Material[] Materials;
 
-	void Start () {
+    private MeshGen mg;
+    private PoolRing<List<int>> tempIndices;
+
+    private void Start () {
+        mg = new MeshGen(Materials);
+        mg.SetTarget(gameObject);
+
+        tempIndices = new PoolRing<List<int>>(4);
+
         Generate();
 	}
 
-	void Update () {
+	private void Update () {
         if (GenerateOnUpdate)
             Generate();
 	}
 
-    //private void OnValidate() {
-    //    Generate();
-    //}
-
     public void Generate() {
-        List<Vector3> vertices = new List<Vector3>();
-        List<int>[] triangles = new List<int>[2];
-        for (int i = 0; i < triangles.Length; i++)
-            triangles[i] = new List<int>();
+        Species.ClampValues();
+
+        mg.Clear();
 
         Quaternion baseRotation = Quaternion.identity;
 
         float startTime = Time.realtimeSinceStartup;
 
-        GenerateSegment(Vector3.zero, baseRotation, Growth, ref vertices, ref triangles);
+        GenerateSegment(Vector3.zero, baseRotation, Growth, null);
+
+        mg.BuildAndAssign();
 
         float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000;
         Debug.Log($"plant generated in {elapsedMs:F2}ms");
-
-        //MeshGen.DeduplicateVertices(ref vertices, ref triangles);
-
-        Mesh mesh = MeshGen.BuildMesh(vertices, triangles);
-
-        MeshGen.AssignMesh(gameObject, mesh, Materials);
     }
 
-    private void GenerateSegment(Vector3 startPosition, Quaternion orientation, float segmentGrowth, ref List<Vector3> vertices, ref List<int>[] triangles) {
-        List<Vector3> segmentVertices = new List<Vector3>();
-        List<int> segmentTriangles = new List<int>();
-
+    private void GenerateSegment(Vector3 startPosition, Quaternion orientation, float segmentGrowth, List<int> startRing) {
         int segmentNumber = Mathf.FloorToInt(Growth - segmentGrowth);
 
         float startScale = Mathf.Pow(segmentGrowth, Species.ScaleExponent);
@@ -78,48 +88,75 @@ public class PlantGenerator : MonoBehaviour {
 
         // build stem segment geometry
 
+        int startVC = mg.VertexCount;
+
+        mg.SetMaterial(0);
+
         float sliceAngle = 2 * Mathf.PI / Species.StemSides;
 
-        List<Vector3> startRing = new List<Vector3>();
-        for (int i = 0; i < Species.StemSides; i++) {
-            startRing.Add(MeshGen.RadialPoint(i * -sliceAngle, Species.SegmentRadius * startScale, 0));
+        if (startRing == null) {
+            startRing = tempIndices.GetNext();
+            startRing.Clear();
+
+            for (int i = 0; i < Species.StemSides; i++) {
+                startRing.Add(mg.AddVertex(RadialPoint(i * sliceAngle, Species.SegmentRadius * startScale, 0)));
+            }
         }
 
         if (segmentGrowth >= 1) {
-            List<Vector3> endRing = new List<Vector3>();
+            // normal (tube) segment
+
+            List<int> endRing = tempIndices.GetNext();
+            endRing.Clear();
+
             for (int i = 0; i < Species.StemSides; i++) {
-                endRing.Add(MeshGen.RadialPoint(i * -sliceAngle, Species.SegmentRadius * endScale, segmentLength));
+                endRing.Add(mg.AddVertex(RadialPoint(i * sliceAngle, Species.SegmentRadius * endScale, segmentLength)));
             }
 
-            MeshGen.AddTubeFaces(startRing, endRing, ref segmentVertices, ref segmentTriangles);
+            for (int i = 0; i < Species.StemSides; i++) {
+                int j = (i + 1) % Species.StemSides;
+                mg.AddFace(endRing[i], endRing[j], startRing[j], startRing[i]);
+            }
+
+            startRing = endRing;
         } else {
-            MeshGen.AddPeak(startRing, segmentLength, ref segmentVertices, ref segmentTriangles);
+            // end (cone) segment
+
+            int endPoint = mg.AddVertex(new Vector3(0, segmentLength, 0));
+
+            for (int i = 0; i < Species.StemSides; i++) {
+                int j = (i + 1) % Species.StemSides;
+                mg.AddFace(endPoint, startRing[j], startRing[i]);
+            }
         }
 
-        // rotate, translate, and add stem segment to final mesh
+        // rotate and translate segment into position
 
-        segmentVertices = MeshGen.RotateVertices(segmentVertices, orientation, Vector3.zero);
-        segmentVertices = MeshGen.TranslateVertices(segmentVertices, startPosition);
+        int endVC = mg.VertexCount;
+        mg.RotateVertices(startVC, endVC, orientation);
+        mg.TranslateVertices(startVC, endVC, startPosition);
 
-        MeshGen.CombineLists(segmentVertices, segmentTriangles, ref vertices, ref triangles[0]);
+        // grow leaves
 
         if (segmentNumber > 0 && segmentGrowth > Species.LeafThreshold && Species.LeavesPerSegment > 0) {
             float leafBaseRotation = segmentNumber * 180 * (Fibonacci[Species.WhorlNumber] / (float)Fibonacci[Species.WhorlNumber + 1]);
-            // build leaves
             float leafAngleSeparation = 360f / Species.LeavesPerSegment;
             for (int i = 0; i < Species.LeavesPerSegment; i++) {
                 Quaternion rotate = Quaternion.AngleAxis(leafBaseRotation + i * leafAngleSeparation, Vector3.up);
-                GenerateLeaf(startPosition, rotate * orientation, segmentGrowth - Species.LeafThreshold, ref vertices, ref triangles);
+                GenerateLeaf(startPosition, rotate * orientation, segmentGrowth - Species.LeafThreshold);
             }
         }
 
-        Vector3 endOffset = Vector3.up * segmentLength;
-        Vector3 endPosition = startPosition + orientation * endOffset;
-        if (segmentGrowth > 1)
-            GenerateSegment(endPosition, orientation, segmentGrowth - 1, ref vertices, ref triangles);
+        // grow a new segment if necessary
+
+        if (segmentGrowth > 1) {
+            Vector3 endOffset = Vector3.up * segmentLength;
+            Vector3 endPosition = startPosition + orientation * endOffset;
+            GenerateSegment(endPosition, orientation, segmentGrowth - 1, startRing);
+        }
     }
 
-    public void GenerateLeaf(Vector3 position, Quaternion orientation, float leafGrowth, ref List<Vector3> vertices, ref List<int>[] triangles) {
+    private void GenerateLeaf(Vector3 position, Quaternion orientation, float leafGrowth) {
 
         Quaternion leafOrientation = orientation * Quaternion.Euler(Species.LeafVerticalAngle, 0, 0);
 
@@ -127,48 +164,62 @@ public class PlantGenerator : MonoBehaviour {
 
         // generate petiole
 
-        List<Vector3> petioleVerts = new List<Vector3>();
-        List<int> petioleTris = new List<int>();
-        
-        List<Vector3> petioleRing = new List<Vector3> {
-            Vector3.right * Species.PetioleWidth * 0.5f,
-            Vector3.left * Species.PetioleWidth * 0.5f,
-            Vector3.down * Species.PetioleDepth
-        };
-        petioleRing = MeshGen.ScaleVertices(petioleRing, leafScale, Vector3.zero);
+        int startVC = mg.VertexCount;
 
-        float petioleLength = Species.PetioleLength * leafScale;
-        Vector3 petioleTip = new Vector3(0, 0, petioleLength);
+        mg.SetMaterial(0);
 
-        MeshGen.AddFanFaces(petioleRing, petioleTip, ref petioleVerts, ref petioleTris);
+        List<int> petioleRing = tempIndices.GetNext();
+        petioleRing.Clear();
 
-        petioleVerts = MeshGen.RotateVertices(petioleVerts, leafOrientation, Vector3.zero);
-        petioleVerts = MeshGen.TranslateVertices(petioleVerts, position);
+        petioleRing.Add(mg.AddVertex(Vector3.left * Species.PetioleWidth * 0.5f));
+        petioleRing.Add(mg.AddVertex(Vector3.right * Species.PetioleWidth * 0.5f));
+        petioleRing.Add(mg.AddVertex(Vector3.down * Species.PetioleDepth));
 
-        MeshGen.CombineLists(petioleVerts, petioleTris, ref vertices, ref triangles[0]);
+        int petioleEndPoint = mg.AddVertex(new Vector3(0, 0, Species.PetioleLength));
+
+        for (int i = 0; i < 3; i++) {
+            int j = (i + 1) % 3;
+            mg.AddFace(petioleEndPoint, petioleRing[j], petioleRing[i]);
+        }
+
+        int endVC = mg.VertexCount;
+
+        // rotate and translate petiole
+
+        mg.ScaleVertices(startVC, endVC, leafScale);
+        mg.RotateVertices(startVC, endVC, leafOrientation);
+        mg.TranslateVertices(startVC, endVC, position);
 
         // generate blade
 
-        List<Vector3> bladeVerts = new List<Vector3>();
-        List<int> bladeTris = new List<int>();
+        startVC = endVC;
 
-        Vector3 bladeBase = Vector3.zero;
-        Vector3 bladeTip = new Vector3(0, 0, Species.BladeLength);
+        mg.SetMaterial(1);
+
+        int bladeBase = mg.AddVertex(Vector3.zero);
+        int bladeTip = mg.AddVertex(new Vector3(0, 0, Species.BladeLength));
         float bladeX = Mathf.Cos(Species.BladeFoldAngle) * Species.BladeWidth * 0.5f;
         float bladeY = Mathf.Sin(Species.BladeFoldAngle) * Species.BladeWidth * 0.5f;
-        Vector3 bladeLeft = new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f);
-        Vector3 bladeRight = new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f);
-        MeshGen.AddFace(new List<Vector3> { bladeBase, bladeTip, bladeRight }, ref bladeVerts, ref bladeTris);
-        MeshGen.AddFace(new List<Vector3> { bladeBase, bladeLeft, bladeTip }, ref bladeVerts, ref bladeTris);
+        int bladeLeft = mg.AddVertex(new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f));
+        int bladeRight = mg.AddVertex(new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f));
+        mg.AddFace(bladeBase, bladeTip, bladeRight);
+        mg.AddFace(bladeBase, bladeLeft, bladeTip);
 
-        bladeVerts = MeshGen.ScaleVertices(bladeVerts, leafScale, Vector3.zero);
-        bladeVerts = MeshGen.RotateVertices(bladeVerts, leafOrientation, Vector3.zero);
+        // TODO: leaf back faces
 
-        Vector3 bladePosition = position + leafOrientation * Vector3.forward * petioleLength * Species.BladePosition;
-        bladeVerts = MeshGen.TranslateVertices(bladeVerts, bladePosition);
+        // rotate and translate blade
 
-        MeshGen.CopyReversed(ref bladeVerts, ref bladeTris);
+        endVC = mg.VertexCount;
 
-        MeshGen.CombineLists(bladeVerts, bladeTris, ref vertices, ref triangles[1]);
+        mg.TranslateVertices(startVC, endVC, new Vector3(0, 0, Species.PetioleLength * Species.BladePosition));
+        mg.ScaleVertices(startVC, endVC, leafScale);
+        mg.RotateVertices(startVC, endVC, leafOrientation);
+        mg.TranslateVertices(startVC, endVC, position);
+    }
+
+    private static Vector3 RadialPoint(float angle, float radius, float y) {
+        float x = Mathf.Cos(angle) * radius;
+        float z = Mathf.Sin(angle) * radius;
+        return new Vector3(x, y, z);
     }
 }
