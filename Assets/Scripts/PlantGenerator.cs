@@ -19,6 +19,10 @@ public class PlantSpecies {
     public float BladeLength;
     public float BladeWidth;
     public float BladeFoldAngle;
+    public float BaseVerticalAngle;
+    public float SegmentVerticalAngle;
+    public float SegmentAngleNoise;
+    public float LeafAngleNoise;
 
     public void ClampValues() {
         StemSides = Mathf.Max(StemSides, 3);
@@ -40,9 +44,10 @@ public class PlantGenerator : MonoBehaviour {
 
     public static readonly int[] Fibonacci = { 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811 };
 
-    public bool GenerateOnUpdate;
+    public bool AutoGenerate;
     public PlantSpecies Species;
     public float Growth;
+    public int Seed;
     public Material[] Materials;
 
     private MeshGen mg;
@@ -54,26 +59,47 @@ public class PlantGenerator : MonoBehaviour {
 
         tempIndices = new PoolRing<List<int>>(4);
 
-        Generate();
+        if (AutoGenerate)
+            Generate(Seed);
 	}
 
 	private void Update () {
-        if (GenerateOnUpdate)
-            Generate();
+        if (AutoGenerate) {
+            if (!Application.isEditor || Application.isPlaying)
+                Generate(Seed);
+        }
 	}
 
-    public void Generate() {
+    private void OnValidate() {
         Species.ClampValues();
 
+        if (AutoGenerate) {
+            if (mg == null) {
+                mg = new MeshGen(Materials);
+                mg.SetTarget(gameObject);
+
+                tempIndices = new PoolRing<List<int>>(4);
+            }
+
+            Generate(Seed);
+        }
+    }
+
+    public void Generate(int seed) {
         mg.Clear();
 
-        Quaternion baseRotation = Quaternion.identity;
+        var oldRandom = Random.state;
+        Random.InitState(seed);
+
+        Quaternion baseRotation = Quaternion.Euler(Species.BaseVerticalAngle, 0, 0);
 
         //float startTime = Time.realtimeSinceStartup;
 
         GenerateSegment(Vector3.zero, baseRotation, Growth, null);
 
         mg.BuildAndAssign();
+
+        Random.state = oldRandom;
 
         //float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000;
         //Debug.Log($"plant generated in {elapsedMs:F2}ms");
