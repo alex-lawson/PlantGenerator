@@ -138,11 +138,14 @@ public static class MeshGen {
         vertices = newVertices;
     }
 
-    // add reversed copies of triangles in the specified list
-    public static void AddBackFaces(ref List<int> triangles) {
+    // duplicate the specified vertices and triangles with the surface normals reversed
+    public static void CopyReversed(ref List<Vector3> vertices, ref List<int> triangles) {
+        int vc = vertices.Count;
+        var vids = AddVertices(vertices, ref vertices);
+
         int tc = triangles.Count;
         for (int i = 0; i < tc; i += 3) {
-            AddTriangle(triangles[i], triangles[i + 2], triangles[i + 1], ref triangles);
+            AddTriangle(vids[triangles[i]], vids[triangles[i + 2]], vids[triangles[i + 1]], ref triangles);
         }
     }
 

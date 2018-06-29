@@ -11,8 +11,7 @@ public class PlantSpecies {
     public float LeafThreshold;
     public int LeavesPerSegment;
     public float LeafVerticalAngle;
-    public int WhorlNom;
-    public int WhorlDenom;
+    public int WhorlNumber;
     public float PetioleLength;
     public float PetioleWidth;
     public float PetioleDepth;
@@ -25,6 +24,9 @@ public class PlantSpecies {
 [ExecuteInEditMode]
 public class PlantGenerator : MonoBehaviour {
 
+    public static readonly int[] Fibonacci = { 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393, 196418, 317811 };
+
+    public bool GenerateOnUpdate;
     public PlantSpecies Species;
     public float Growth;
     public Material[] Materials;
@@ -34,12 +36,13 @@ public class PlantGenerator : MonoBehaviour {
 	}
 
 	void Update () {
-
+        if (GenerateOnUpdate)
+            Generate();
 	}
 
-    private void OnValidate() {
-        Generate();
-    }
+    //private void OnValidate() {
+    //    Generate();
+    //}
 
     public void Generate() {
         List<Vector3> vertices = new List<Vector3>();
@@ -56,7 +59,7 @@ public class PlantGenerator : MonoBehaviour {
         float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000;
         Debug.Log($"plant generated in {elapsedMs:F2}ms");
 
-        MeshGen.DeduplicateVertices(ref vertices, ref triangles);
+        //MeshGen.DeduplicateVertices(ref vertices, ref triangles);
 
         Mesh mesh = MeshGen.BuildMesh(vertices, triangles);
 
@@ -101,7 +104,7 @@ public class PlantGenerator : MonoBehaviour {
         MeshGen.CombineLists(segmentVertices, segmentTriangles, ref vertices, ref triangles[0]);
 
         if (segmentNumber > 0 && segmentGrowth > Species.LeafThreshold && Species.LeavesPerSegment > 0) {
-            float leafBaseRotation = segmentNumber * 360 * (Species.WhorlNom / (float)Species.WhorlDenom - 1);
+            float leafBaseRotation = segmentNumber * 180 * (Fibonacci[Species.WhorlNumber] / (float)Fibonacci[Species.WhorlNumber + 1]);
             // build leaves
             float leafAngleSeparation = 360f / Species.LeavesPerSegment;
             for (int i = 0; i < Species.LeavesPerSegment; i++) {
@@ -162,7 +165,9 @@ public class PlantGenerator : MonoBehaviour {
         bladeVerts = MeshGen.RotateVertices(bladeVerts, leafOrientation, Vector3.zero);
 
         Vector3 bladePosition = position + leafOrientation * Vector3.forward * petioleLength * Species.BladePosition;
-        bladeVerts = MeshGen.TranslateVertices(bladeVerts, position);
+        bladeVerts = MeshGen.TranslateVertices(bladeVerts, bladePosition);
+
+        MeshGen.CopyReversed(ref bladeVerts, ref bladeTris);
 
         MeshGen.CombineLists(bladeVerts, bladeTris, ref vertices, ref triangles[1]);
     }
