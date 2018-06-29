@@ -196,6 +196,8 @@ public class PlantGenerator : MonoBehaviour {
 
         mg.SetMaterial(1);
 
+        // leaf front faces
+
         int bladeBase = mg.AddVertex(Vector3.zero);
         int bladeTip = mg.AddVertex(new Vector3(0, 0, Species.BladeLength));
         float bladeX = Mathf.Cos(Species.BladeFoldAngle) * Species.BladeWidth * 0.5f;
@@ -205,7 +207,14 @@ public class PlantGenerator : MonoBehaviour {
         mg.AddFace(bladeBase, bladeTip, bladeRight);
         mg.AddFace(bladeBase, bladeLeft, bladeTip);
 
-        // TODO: leaf back faces
+        // leaf back faces
+
+        bladeBase = mg.AddVertex(Vector3.zero);
+        bladeTip = mg.AddVertex(new Vector3(0, 0, Species.BladeLength));
+        bladeLeft = mg.AddVertex(new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f));
+        bladeRight = mg.AddVertex(new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f));
+        mg.AddFace(bladeBase, bladeRight, bladeTip);
+        mg.AddFace(bladeBase, bladeTip, bladeLeft);
 
         // rotate and translate blade
 
