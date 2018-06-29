@@ -69,14 +69,14 @@ public class PlantGenerator : MonoBehaviour {
 
         Quaternion baseRotation = Quaternion.identity;
 
-        float startTime = Time.realtimeSinceStartup;
+        //float startTime = Time.realtimeSinceStartup;
 
         GenerateSegment(Vector3.zero, baseRotation, Growth, null);
 
         mg.BuildAndAssign();
 
-        float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000;
-        Debug.Log($"plant generated in {elapsedMs:F2}ms");
+        //float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000;
+        //Debug.Log($"plant generated in {elapsedMs:F2}ms");
     }
 
     private void GenerateSegment(Vector3 startPosition, Quaternion orientation, float segmentGrowth, List<int> startRing) {
@@ -158,7 +158,7 @@ public class PlantGenerator : MonoBehaviour {
 
     private void GenerateLeaf(Vector3 position, Quaternion orientation, float leafGrowth) {
 
-        Quaternion leafOrientation = orientation * Quaternion.Euler(Species.LeafVerticalAngle, 0, 0);
+        Quaternion leafOrientation = orientation * Quaternion.Euler(-Species.LeafVerticalAngle, 0, 0);
 
         float leafScale = Mathf.Pow(leafGrowth, Species.ScaleExponent);
 
@@ -188,23 +188,29 @@ public class PlantGenerator : MonoBehaviour {
 
         mg.SetMaterial(1);
 
-        // leaf front faces
+        // blade front faces
+
+        float bladeX = Mathf.Cos(Species.BladeFoldAngle * Mathf.Deg2Rad) * Species.BladeWidth * 0.5f;
+        float bladeY = Mathf.Sin(Species.BladeFoldAngle * Mathf.Deg2Rad) * Species.BladeWidth * 0.5f;
+        Vector3 bladeLeftPos = new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f);
+        Vector3 bladeRightPos = new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f);
+        Vector3 bladeTipPos = new Vector3(0, 0, Species.BladeLength);
 
         int bladeBase = mg.AddVertex(Vector3.zero);
-        int bladeTip = mg.AddVertex(new Vector3(0, 0, Species.BladeLength));
-        float bladeX = Mathf.Cos(Species.BladeFoldAngle) * Species.BladeWidth * 0.5f;
-        float bladeY = Mathf.Sin(Species.BladeFoldAngle) * Species.BladeWidth * 0.5f;
-        int bladeLeft = mg.AddVertex(new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f));
-        int bladeRight = mg.AddVertex(new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f));
+        int bladeTip = mg.AddVertex(bladeTipPos);
+        int bladeLeft = mg.AddVertex(bladeLeftPos);
+        int bladeRight = mg.AddVertex(bladeRightPos);
+
         mg.AddFace(bladeBase, bladeTip, bladeRight);
         mg.AddFace(bladeBase, bladeLeft, bladeTip);
 
-        // leaf back faces
+        // blade back faces
 
         bladeBase = mg.AddVertex(Vector3.zero);
-        bladeTip = mg.AddVertex(new Vector3(0, 0, Species.BladeLength));
-        bladeLeft = mg.AddVertex(new Vector3(-bladeX, bladeY, Species.BladeLength * 0.5f));
-        bladeRight = mg.AddVertex(new Vector3(bladeX, bladeY, Species.BladeLength * 0.5f));
+        bladeTip = mg.AddVertex(bladeTipPos);
+        bladeLeft = mg.AddVertex(bladeLeftPos);
+        bladeRight = mg.AddVertex(bladeRightPos);
+
         mg.AddFace(bladeBase, bladeRight, bladeTip);
         mg.AddFace(bladeBase, bladeTip, bladeLeft);
 
